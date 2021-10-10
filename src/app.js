@@ -6,7 +6,8 @@ const app = express();
 const port = process.env.PORT || 8000;
 const hbs = require('hbs');
 const bcrypt = require('bcryptjs');
-
+const cookieParser = require('cookie-parser');
+const auth = require("./middleware/auth")
 
 // connect to conn.js
 require('./db/conn');
@@ -23,6 +24,7 @@ hbs.registerPartials(partialsPath); // saying that we are using partials
 app.use(express.static(staticPath)); // for static
 app.use(express.json());
 app.use(express.urlencoded({ extended: false })); // we are not using post man so to get the data from the url
+app.use(cookieParser()); // to use cookies as miiddle ware.
 
 console.log(process.env.SECRET);
 
@@ -38,6 +40,33 @@ app.get("/register", (req, res) => {
 
 app.get("/login", (req, res) => {
     res.render("login.hbs");
+});
+
+
+app.get("/secret", auth, (req, res) => {
+    console.log(`this is the cookie number ${req.cookies.jwt}`); // we cant use immediatly when we create your cookie so we are not using in login post method at login post we are creating cookie and we are checking here. // for this command only we have download npm i cookie-parser
+    res.render("secret.hbs");
+});
+
+app.get("/logout", auth, async (req, res) => {
+    try {
+        // method - 1
+        // user can login same website with multipul divies so we need to logout only the device the present user have pressed logout
+        // if we have login with same devices then we will store tokens in the database so we are removing the latest token 
+        req.user.tokens = req.user.tokens.filter((currElement) => {
+            return !(currElement.token === req.token);
+        });
+        // method - 2
+
+        res.clearCookie('jwt'); // cclearing the cookies
+        console.log("logout sucess");
+        console.log(`REQ USER = ${req.user}`);
+        await req.user.save();
+        res.render("login.hbs");
+
+    } catch (err) {
+        res.status(500).send(err);
+    }
 });
 
 app.post("/register", async (req, res) => {
@@ -59,6 +88,13 @@ app.post("/register", async (req, res) => {
             // so we are calling the pre function to the hash the password.
 
             const token = await registerEmployee.generateAuthToken();
+
+            //res.cookie(name, value, [options]); // syntax
+
+            res.cookie("jwt", token, {
+                expires: new Date(Date.now() + 600000), // expires in 30sec
+                httpOnly: true // by using this client cant delete any cookies but the user can delete 
+            });
 
             const registered = await registerEmployee.save();
             res.status(200).render("index.hbs");
@@ -97,6 +133,13 @@ app.post("/login", async (req, res) => {
         }*/
 
         const token = await userDataByUsername.generateAuthToken();
+
+        res.cookie("jwt", token, {
+            expires: new Date(Date.now() + 600000), // expires in 30sec
+            httpOnly: true // by using this client cant delete any cookies but the user can delete 
+        });
+
+
 
         if (isMatch) {
             res.status(201).render("index.hbs");
@@ -162,5 +205,10 @@ createToken();
 app.listen(port, () => {
     console.log(`Listening to the port ${port}`);
 });
+
+
+
+
+
 
 
